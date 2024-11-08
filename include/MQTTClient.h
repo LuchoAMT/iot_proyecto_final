@@ -9,7 +9,7 @@ class MQTTClient {
 public:
     MQTTClient(const char* SERVER, int PORT, const char* TOPIC);
     void connect(WiFiClientSecure& wifiClient);
-    void connect(WiFiClient& wifiClient);
+    //void connect(WiFiClient& wifiClient);
     void publishMessage(const char* message);
     void subscribe();
     bool isConnected();

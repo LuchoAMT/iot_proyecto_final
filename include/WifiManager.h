@@ -10,7 +10,7 @@ public:
     void connect();
     void setCertificates(const char *CA_CERT, const char *CLIENT_CERT, const char *CLIENT_KEY);
     bool isConnected();
-    WiFiClient& getWifiClient(); // Para acceder al cliente WiFi seguro
+    WiFiClientSecure& getWifiClient(); // Para acceder al cliente WiFi seguro
 
 private:
     const char* SSID;
