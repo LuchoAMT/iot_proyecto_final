@@ -20,23 +20,6 @@ void MQTTClient::connect(WiFiClientSecure& wifiClient) {
     }
 }
 
-// void MQTTClient::connect(WiFiClient& wifiClient) {
-//     client.setClient(wifiClient);
-//     client.setServer(SERVER, PORT);
-//     Serial.println("Connecting to MQTT...");
-//     while (!client.connected()) {
-//         Serial.println(".");
-//         if (client.connect("ESP32Panconquesito")) {
-//             Serial.println("Connected to MQTT");
-//             subscribe();
-//         } else {
-//             Serial.print("Failed MQTT connection, rc=");
-//             Serial.print(client.state());
-//             delay(2000);
-//         }
-//     }
-// }
-
 void MQTTClient::publishMessage(const char* message) {
     if (client.connected()) {
         client.publish(TOPIC, message);

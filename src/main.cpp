@@ -120,10 +120,6 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     for (int i = 0; i < length; i++) {
         message += (char)payload[i];
     }
-    // if (message.startsWith("{")){
-    //   Serial.println("Mensaje ignorado!");
-    //   return;
-    // }
     
     Serial.print("Mensaje recibido: ");
     Serial.println(message);

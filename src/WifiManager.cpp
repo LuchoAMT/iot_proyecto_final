@@ -23,7 +23,6 @@ void WifiManager::connect()
   }
   Serial.println("Connected to WiFi");
 
-  //wifiClient.setInsecure();
 }
 
 bool WifiManager::isConnected()
