@@ -11,11 +11,11 @@
 DHT dht(DHTPIN, DHTTYPE);
 Adafruit_MLX90614 mlx = Adafruit_MLX90614();
 
-// const char* SSID = "Huawei P50 Pro";
-// const char* PASS = "nqyct6y9ypt7xic";
+const char* SSID = "Huawei P50 Pro";
+const char* PASS = "nqyct6y9ypt7xic";
 
-const char* SSID = "Menacho-8Mbps";
-const char* PASS = "47Lu1sT0no43";
+// const char* SSID = "Menacho-8Mbps";
+// const char* PASS = "47Lu1sT0no43";
 
 // Información del broker MQTT de AWS
 const char* SERVER = "a255q5ixlivm2d-ats.iot.us-east-2.amazonaws.com";  // Obtén el endpoint de AWS IoT
