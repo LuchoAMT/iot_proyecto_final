@@ -5,17 +5,18 @@
 #include "LCDManager.h"
 #include <ArduinoJson.h>
 
-
 #define DHTPIN 4        // Pin del DHT11
 #define DHTTYPE DHT11   // Tipo de sensor DHT11
+#define BUZZERPIN 5
+
 DHT dht(DHTPIN, DHTTYPE);
 Adafruit_MLX90614 mlx = Adafruit_MLX90614();
 
-const char* SSID = "Huawei P50 Pro";
-const char* PASS = "nqyct6y9ypt7xic";
+// const char* SSID = "Huawei P50 Pro";
+// const char* PASS = "nqyct6y9ypt7xic";
 
-// const char* SSID = "Menacho-8Mbps";
-// const char* PASS = "47Lu1sT0no43";
+const char* SSID = "Menacho-8Mbps";
+const char* PASS = "47Lu1sT0no43";
 
 // Información del broker MQTT de AWS
 const char* SERVER = "a255q5ixlivm2d-ats.iot.us-east-2.amazonaws.com";  // Obtén el endpoint de AWS IoT
@@ -33,9 +34,14 @@ float lastTempDHT = -100.0;
 float lastTempMLX = -100.0;
 const float TEMP_TRESH = 5.0;
 
+unsigned long lastSentTime = 0;
+const unsigned long SEND_INTERVAL = 50000;
+
 StaticJsonDocument<256> shadowDoc;
 char outputBuffer[256];
 
+byte buzzer = 0;
+byte prevBuzzerState = 0;
 
 // Certificados y clave privada
 const char* CA_CERT = \
@@ -111,21 +117,31 @@ const char* CLIENT_KEY = \
 "KGUlNfKPV+6Cf5q/7IgjQjPQSR+XCKUcp26d7+k0Nbf4Eq7RfQprNw==\n"\
 "-----END RSA PRIVATE KEY-----\n";
 
+const int BUZZERINTERVAL = 10;
+bool buzzerActive = false; 
+int beepCount = 0; 
+unsigned long previousMillis = 0;
 
-
+void triggerBuzzer(){ //se optó por usar delay en lugar de millis ya que con millis la duración del beep nunca variaba aun cambiando el dato de forma manual.
+  for (int i = 0; i < 2; i++) {    // Dos beeps
+    digitalWrite(BUZZERPIN, HIGH); // Enciende el buzzer
+    delay(50);                     // Duración del beep (ajústalo a tu gusto)
+    digitalWrite(BUZZERPIN, LOW);  // Apaga el buzzer
+    delay(50);                     // Pausa entre beeps
+  }
+}
 
 // Función callback para manejar los mensajes recibidos por MQTT
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
-    String message;
-    for (int i = 0; i < length; i++) {
-        message += (char)payload[i];
-    }
-    
-    Serial.print("Mensaje recibido: ");
-    Serial.println(message);
-    
-    lcd.clear();
-    lcd.print(message.c_str());
+  String message;
+  for (int i = 0; i < length; i++){
+    message += (char)payload[i];
+  }
+
+  Serial.print("Mensaje recibido: ");
+  Serial.println(message);
+  lcd.clear();
+  lcd.print(message.c_str());  
 }
 
 void setup() {
@@ -135,6 +151,9 @@ void setup() {
 
   mqttClient.connect(wifiManager.getWifiClient());
   mqttClient.setCallback(mqttCallback);
+
+  pinMode(BUZZERPIN, OUTPUT);
+  digitalWrite(BUZZERPIN, LOW);
   
   Wire.begin(26,25);
   sensorManager.initialize();
@@ -147,14 +166,18 @@ void setup() {
 
 void loop(){
   mqttClient.loop();
-
   float tempDHT, tempMLX;
   sensorManager.readSensors(tempDHT, tempMLX);
 
+  if (tempMLX >= 37){
+    triggerBuzzer();
+  }
+
   bool significantChangeDHT = abs(tempDHT - lastTempDHT) >= TEMP_TRESH;
   bool significantChangeMLX = abs(tempMLX - lastTempMLX) >= TEMP_TRESH;
+  bool sentIntervalDeath = millis() - lastSentTime >= SEND_INTERVAL;
 
-  if (significantChangeDHT || significantChangeMLX){
+  if (significantChangeDHT || significantChangeMLX || sentIntervalDeath){
     shadowDoc["state"]["reported"]["tempDHT"] = tempDHT;
     shadowDoc["state"]["reported"]["tempMLX"] = tempMLX;
     serializeJson(shadowDoc, outputBuffer);
@@ -165,6 +188,10 @@ void loop(){
 
     lastTempDHT = tempDHT;
     lastTempMLX = tempMLX;
+    lastSentTime = millis();
+  }
+  if (tempMLX >= 37){
+    triggerBuzzer();
   }
   
   lcd.displayTemperatures(tempDHT, tempMLX);

@@ -1,0 +1,6 @@
+SELECT timestamp() as id,
+    topic(3) as thing_name,
+    state.reported.tempMLX as tempMLX,
+    state.reported.tempDHT as tempDHT
+FROM '$aws/things/+/shadow/update/accepted' 
+WHERE state.reported.tempDHT > 0
