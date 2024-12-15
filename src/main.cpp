@@ -1,5 +1,5 @@
 #include <Arduino.h>
-#include "WiFiManager.h"
+#include "WiFiMngr.h"
 #include "MQTTClient.h"
 #include "SensorManager.h"
 #include "LCDManager.h"
@@ -12,11 +12,13 @@
 DHT dht(DHTPIN, DHTTYPE);
 Adafruit_MLX90614 mlx = Adafruit_MLX90614();
 
+
+
 // const char* SSID = "Huawei P50 Pro";
 // const char* PASS = "nqyct6y9ypt7xic";
 
-const char* SSID = "Menacho-8Mbps";
-const char* PASS = "47Lu1sT0no43";
+// const char* SSID = "Menacho-8Mbps";
+// const char* PASS = "47Lu1sT0no43";
 
 // Información del broker MQTT de AWS
 const char* SERVER = "a255q5ixlivm2d-ats.iot.us-east-2.amazonaws.com";  // Obtén el endpoint de AWS IoT
@@ -24,21 +26,25 @@ const int PORT = 8883; // Puerto para conexión segura
 const char* TOPIC = "sensores/temperaturas";
 const char* UPDATE_TOPIC = "$aws/things/coso_esp_temperatura/shadow/update";              // publish
 const char* UPDATE_DELTA_TOPIC = "$aws/things/coso_esp_temperatura/shadow/update/delta";  // subscribe
+const char* UPDATE_DOCUMENTS_TOPIC = "$aws/things/coso_esp_temperatura/shadow/update/documents";
 
-WifiManager wifiManager(SSID, PASS);
-MQTTClient mqttClient(SERVER, PORT, UPDATE_TOPIC);
+WifiManager wifiManager;
+MQTTClient mqttClient(SERVER, PORT, UPDATE_DELTA_TOPIC);
 SensorManager sensorManager(dht, mlx);
 LCDManager lcd(0x27,16,2);
 
 float lastTempDHT = -100.0;
 float lastTempMLX = -100.0;
-const float TEMP_TRESH = 5.0;
+float TEMP_TRESH = 5.0;
 
 unsigned long lastSentTime = 0;
-const unsigned long SEND_INTERVAL = 50000;
+unsigned long SEND_INTERVAL = 50000;
+
+int ALARM_TEMP = 37;
 
 StaticJsonDocument<256> shadowDoc;
 char outputBuffer[256];
+StaticJsonDocument<5000> inputDoc;
 
 byte buzzer = 0;
 byte prevBuzzerState = 0;
@@ -131,8 +137,23 @@ void triggerBuzzer(){ //se optó por usar delay en lugar de millis ya que con mi
   }
 }
 
+void updateReportedState() {
+  shadowDoc["state"]["reported"]["tempTresh"] = TEMP_TRESH;
+  shadowDoc["state"]["reported"]["sendInterval"] = SEND_INTERVAL;
+  shadowDoc["state"]["reported"]["alarmTemp"] = ALARM_TEMP;
+
+  serializeJson(shadowDoc, outputBuffer);
+
+  mqttClient.publishMessage(UPDATE_TOPIC, outputBuffer);
+
+  Serial.println("Reported state actualizado:");
+  Serial.println(outputBuffer);
+}
+
 // Función callback para manejar los mensajes recibidos por MQTT
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
+  Serial.print("topico de callback: ");
+  Serial.println(topic);
   String message;
   for (int i = 0; i < length; i++){
     message += (char)payload[i];
@@ -142,6 +163,51 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   Serial.println(message);
   lcd.clear();
   lcd.print(message.c_str());  
+  DeserializationError err = deserializeJson(inputDoc, payload);
+  if (!err) {
+    if (String(topic) == UPDATE_DELTA_TOPIC) {
+      Serial.println("Contenido de inputDoc:");
+      serializeJsonPretty(inputDoc, Serial);
+      Serial.println();
+
+      // Extraer y actualizar umbrales
+
+      if (inputDoc["state"].containsKey("tempTresh")) {
+        float newTempTresh = inputDoc["state"]["tempTresh"].as<float>();
+        if (newTempTresh > 0) { // Validar el valor
+          TEMP_TRESH = newTempTresh;
+          Serial.print("Nuevo TEMP_TRESH: ");
+          Serial.println(TEMP_TRESH);
+        }
+      }
+
+      if (inputDoc["state"].containsKey("sendInterval")) {
+        unsigned long newSendInterval = inputDoc["state"]["sendInterval"].as<unsigned long>();
+        if (newSendInterval > 0) { // Validar el valor
+          SEND_INTERVAL = newSendInterval;
+          Serial.print("Nuevo SEND_INTERVAL: ");
+          Serial.println(SEND_INTERVAL);
+        }
+      }
+
+      if (inputDoc["state"].containsKey("alarmTemp")) {
+        int newAlarmTemp = inputDoc["state"]["alarmTemp"].as<int>();
+        if (newAlarmTemp > 0) { // Validar el valor
+          ALARM_TEMP = newAlarmTemp;
+          Serial.print("Nuevo ALARM_TEMP: ");
+          Serial.println(ALARM_TEMP);
+        }
+      }
+
+      updateReportedState();
+    }
+  }
+  else {
+    Serial.print("Error de deserialización: ");
+    Serial.println(err.c_str());
+    return;
+  }
+
 }
 
 void setup() {
@@ -150,7 +216,11 @@ void setup() {
   wifiManager.connect();
 
   mqttClient.connect(wifiManager.getWifiClient());
+  mqttClient.subscribe(UPDATE_DOCUMENTS_TOPIC);
+  mqttClient.subscribe(UPDATE_DELTA_TOPIC);
+
   mqttClient.setCallback(mqttCallback);
+  //mqttClient.subscribe(UPDATE_TOPIC);
 
   pinMode(BUZZERPIN, OUTPUT);
   digitalWrite(BUZZERPIN, LOW);
@@ -169,7 +239,7 @@ void loop(){
   float tempDHT, tempMLX;
   sensorManager.readSensors(tempDHT, tempMLX);
 
-  if (tempMLX >= 37){
+  if (tempMLX >= ALARM_TEMP){
     triggerBuzzer();
   }
 
@@ -182,7 +252,7 @@ void loop(){
     shadowDoc["state"]["reported"]["tempMLX"] = tempMLX;
     serializeJson(shadowDoc, outputBuffer);
 
-    mqttClient.publishMessage(outputBuffer);
+    mqttClient.publishMessage(UPDATE_TOPIC, outputBuffer);
     Serial.println("Reported to shadow: ");
     Serial.println(outputBuffer);
 
@@ -190,7 +260,7 @@ void loop(){
     lastTempMLX = tempMLX;
     lastSentTime = millis();
   }
-  if (tempMLX >= 37){
+  if (tempMLX >= ALARM_TEMP){
     triggerBuzzer();
   }
   

@@ -10,8 +10,9 @@ public:
     MQTTClient(const char* SERVER, int PORT, const char* TOPIC);
     void connect(WiFiClientSecure& wifiClient);
     //void connect(WiFiClient& wifiClient);
-    void publishMessage(const char* message);
+    void publishMessage(const char* topic, const char* message);
     void subscribe();
+    void subscribe(const char* targetTopic);
     bool isConnected();
     void setCallback(MQTT_CALLBACK_SIGNATURE);
     void loop();

@@ -2,7 +2,7 @@ const Alexa = require('ask-sdk-core');
 const AWS = require('aws-sdk');
 const IotData = new AWS.IotData({endpoint: 'a255q5ixlivm2d-ats.iot.us-east-2.amazonaws.com'});
 
-const ShadowParams = {
+let ShadowParams = {
     thingName: 'coso_esp_temperatura',
 };
 
@@ -112,6 +112,253 @@ const StateIntentHandler = {
         }
     },
 };
+
+const changeSendIntervalHandler = {
+    canHandle(handlerInput) {
+        return Alexa.getRequestType(handlerInput.requestEnvelope) === 'IntentRequest'
+            && Alexa.getIntentName(handlerInput.requestEnvelope) === 'changeSendInterval';
+    },
+    async handle(handlerInput) {
+        try {
+            console.log("entrando a changeSendInterval");
+
+            // Recuperar el valor del slot sendInterval
+            const intervalSlot = handlerInput.requestEnvelope.request.intent.slots.sendInterval;
+
+            if (!intervalSlot || !intervalSlot.value) {
+                // Si el slot está vacío, responde con un mensaje de error
+                const speakOutput = 'Por favor, proporciona un intervalo de tiempo válido (por ejemplo, 5 minutos o 30 segundos).';
+                return handlerInput.responseBuilder
+                    .speak(speakOutput)
+                    .getResponse();
+            }
+
+            const intervalText = intervalSlot.value.toLowerCase();
+            console.log(`Texto del intervalo: ${intervalText}`);
+
+            // Usar una expresión regular para separar el número y la unidad
+            const match = intervalText.match(/(\d+)\s*(segundos|minutos|minuto|segundo)/);
+
+            if (!match) {
+                const speakOutput = 'Por favor, proporciona un intervalo válido con una unidad (segundos o minutos).';
+                return handlerInput.responseBuilder
+                    .speak(speakOutput)
+                    .getResponse();
+            }
+
+            const interval = parseInt(match[1], 10);
+            const unit = match[2];
+
+            // Convertir a milisegundos según la unidad
+            let intervalInMs;
+            if (unit == 'segundos' || unit == 'segundo') {
+                intervalInMs = interval * 1000;  // Convertir segundos a milisegundos
+            } else if (unit == 'minutos' || unit == 'minuto') {
+                intervalInMs = interval * 60000;  // Convertir minutos a milisegundos
+            }
+
+            // Ahora tienes el valor del intervalo en milisegundos
+            console.log(`Intervalo en milisegundos: ${intervalInMs}`);
+
+            // Actualizar el shadow con el nuevo intervalo en desired
+            const UpdateParams = {
+                thingName: 'coso_esp_temperatura',  // Asegúrate de usar el nombre correcto del thing
+                payload: JSON.stringify({
+                    state: {
+                        desired: {
+                            sendInterval: intervalInMs  // Actualiza el valor en desired
+                        }
+                    }
+                })
+            };
+
+            const updateShadow = new Promise((resolve, reject) => {
+                IotData.updateThingShadow(UpdateParams, (err, data) => {
+                    if (err) {
+                        console.log("Error al actualizar el shadow:", err, err.stack);
+                        reject(`Failed to update thing shadow: ${err.errorMessage}`);
+                    } else {
+                        console.log("Shadow actualizado exitosamente:", data);
+                        resolve(data);  // Respuesta con los datos de la actualización
+                    }
+                });
+            });
+
+            // Esperamos a que la promesa se resuelva
+            await updateShadow;
+
+            // Responder al usuario
+            const speakOutput = `El intervalo de envío de datos se cambió a ${interval} ${unit}.`;
+
+            return handlerInput.responseBuilder
+                .speak(speakOutput)
+                .reprompt(speakOutput)
+                .getResponse();
+
+        } catch (error) {
+            console.error('Error al actualizar el intervalo: ', error);
+            const speakOutput = 'Hubo un error al setear el nuevo intervalo. Por favor, intenta nuevamente.';
+            return handlerInput.responseBuilder
+                .speak(speakOutput)
+                .reprompt(speakOutput)
+                .getResponse();
+        }
+    },
+};
+
+
+const changeTemperatureTreshHandler = {
+    canHandle(handlerInput) {
+        return Alexa.getRequestType(handlerInput.requestEnvelope) === 'IntentRequest'
+            && Alexa.getIntentName(handlerInput.requestEnvelope) === 'changeTemperatureTresh';
+    },
+    async handle(handlerInput) {
+        try {
+            console.log("Entrando a changeTemperatureTresh");
+
+            // Recuperar el valor del slot tempTresh
+            const tempTreshSlot = handlerInput.requestEnvelope.request.intent.slots.tempTresh;
+
+            if (!tempTreshSlot || !tempTreshSlot.value) {
+                // Si el slot está vacío o no se reconoce correctamente, responde con un mensaje de error
+                const speakOutput = 'Por favor, proporciona un valor válido para el umbral de temperatura.';
+                return handlerInput.responseBuilder
+                    .speak(speakOutput)
+                    .getResponse();
+            }
+
+            const tempTresh = parseInt(tempTreshSlot.value, 10); // Convertir el valor a número
+
+            // Verificar que el valor esté dentro de un rango válido (por ejemplo, 0 a 100)
+            if (isNaN(tempTresh) || tempTresh < 0 || tempTresh > 100) {
+                const speakOutput = 'El umbral de temperatura debe ser un valor entre 0 y 100 grados.';
+                return handlerInput.responseBuilder
+                    .speak(speakOutput)
+                    .getResponse();
+            }
+
+            // Actualizar el shadow con el nuevo valor de tempTresh
+            const UpdateParams = {
+                thingName: 'coso_esp_temperatura',  // Asegúrate de usar el nombre correcto del thing
+                payload: JSON.stringify({
+                    state: {
+                        desired: {
+                            tempTresh: tempTresh  // Actualiza el valor en desired
+                        }
+                    }
+                })
+            };
+
+            const updateShadow = new Promise((resolve, reject) => {
+                IotData.updateThingShadow(UpdateParams, (err, data) => {
+                    if (err) {
+                        console.log("Error al actualizar el shadow:", err, err.stack);
+                        reject(`Failed to update thing shadow: ${err.errorMessage}`);
+                    } else {
+                        console.log("Shadow actualizado exitosamente:", data);
+                        resolve(data);  // Respuesta con los datos de la actualización
+                    }
+                });
+            });
+
+            // Esperamos a que la promesa se resuelva
+            await updateShadow;
+
+            // Responder al usuario
+            const speakOutput = `El umbral de temperatura significativa se ha cambiado a ${tempTresh} grados.`;
+
+            return handlerInput.responseBuilder
+                .speak(speakOutput)
+                .reprompt(speakOutput)
+                .getResponse();
+
+        } catch (error) {
+            console.error('Error al actualizar el umbral de temperatura: ', error);
+            const speakOutput = 'Hubo un error al cambiar el umbral de temperatura. Por favor, intenta nuevamente.';
+            return handlerInput.responseBuilder
+                .speak(speakOutput)
+                .reprompt(speakOutput)
+                .getResponse();
+        }
+    },
+};
+
+const changeAlarmTempHandler = {
+    canHandle(handlerInput) {
+        return Alexa.getRequestType(handlerInput.requestEnvelope) === 'IntentRequest'
+            && Alexa.getIntentName(handlerInput.requestEnvelope) === 'changeAlarmTemp';
+    },
+    async handle(handlerInput) {
+        try {
+            console.log("Entrando a changeAlarmTemp");
+
+            // Recuperar el valor del slot alarmTemp
+            const alarmTempSlot = handlerInput.requestEnvelope.request.intent.slots.alarmTemp;
+
+            if (!alarmTempSlot || !alarmTempSlot.value) {
+                // Si el slot está vacío o no se reconoce correctamente, responde con un mensaje de error
+                const speakOutput = 'Por favor, proporciona un valor válido para la temperatura de alarma.';
+                return handlerInput.responseBuilder
+                    .speak(speakOutput)
+                    .getResponse();
+            }
+
+            const alarmTemp = parseInt(alarmTempSlot.value, 10); // Convertir el valor a número
+
+            // Verificar que el valor esté dentro de un rango válido (por ejemplo, 0 a 100)
+            if (isNaN(alarmTemp) || alarmTemp < 0 || alarmTemp > 100) {
+                const speakOutput = 'La temperatura de alarma debe ser un valor entre 0 y 100 grados.';
+                return handlerInput.responseBuilder
+                    .speak(speakOutput)
+                    .getResponse();
+            }
+
+            // Actualizar el shadow con el nuevo valor de alarmTemp
+            const UpdateParams = {
+                thingName: 'coso_esp_temperatura',  // Asegúrate de usar el nombre correcto del thing
+                payload: JSON.stringify({
+                    state: {
+                        desired: {
+                            alarmTemp: alarmTemp  // Actualiza el valor en desired
+                        }
+                    }
+                })
+            };
+
+            const updateShadow = new Promise((resolve, reject) => {
+                IotData.updateThingShadow(UpdateParams, (err, data) => {
+                    if (err) {
+                        console.log("Error al actualizar el shadow:", err, err.stack);
+                        reject(`Failed to update thing shadow: ${err.errorMessage}`);
+                    } else {
+                        console.log("Shadow actualizado exitosamente:", data);
+                        resolve(data);  // Respuesta con los datos de la actualización
+                    }
+                });
+            });
+
+            // Esperamos a que la promesa se resuelva
+            await updateShadow;
+
+            // Responder al usuario
+            const speakOutput = `La temperatura de alarma se ha cambiado a ${alarmTemp} grados.`;
+
+            return handlerInput.responseBuilder
+                .speak(speakOutput)
+                .reprompt(speakOutput)
+                .getResponse();
+
+        } catch (error) {
+            console.error('Error al actualizar la temperatura de alarma: ', error);
+            const speakOutput = 'Hubo un error al cambiar la temperatura de alarma. Por favor, intenta nuevamente.';
+            return handlerInput.responseBuilder
+                .speak(speakOutput)
+                .reprompt(speakOutput)
+                .getResponse();
+        }
+    },
+};
+
 
 const HelpIntentHandler = {
     canHandle(handlerInput) {
@@ -226,6 +473,9 @@ exports.handler = Alexa.SkillBuilders.custom()
         AmbientIntentHandler,
         ObjectIntentHandler,
         StateIntentHandler,
+        changeSendIntervalHandler,
+        changeTemperatureTreshHandler,
+        changeAlarmTempHandler,
         HelpIntentHandler,
         CancelAndStopIntentHandler,
         FallbackIntentHandler,
@@ -235,3 +485,4 @@ exports.handler = Alexa.SkillBuilders.custom()
         ErrorHandler)
     .withCustomUserAgent('sample/hello-world/v1.2')
     .lambda();
+    
